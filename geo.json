@@ -1,0 +1,147 @@
+{
+  "name": "geo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "geo-gen",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "3175c5e4-281c-463b-96b3-c10d91ba6681",
+      "name": "Webhook (输入需求)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -208
+      ],
+      "webhookId": "55476e1e-aeb3-4e8e-a6da-fce94a82e431"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fastgpt:3000/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer fastgpt-gTZdV0Snrxk73ZPpoczCT1WAYFKW3FMO7LFh66OA2iN2iEhR4g8gZIW9XO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chatId",
+              "value": "={{ 'gen_' + $json.body.topic }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ [{'role':'user', 'content': '我的需求是：' + $json.body.topic + '。请推荐5个品牌。'}] }}"
+            },
+            {
+              "name": "detail",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1da29dfc-533a-4df7-b9f4-b2a325618cbf",
+      "name": "呼叫 FastGPT (生成)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        304,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  // 1. 获取内容\n  const rawContent = $input.item.json.choices[0].message.content;\n  // 2. 清洗\n  const cleanJson = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();\n  // 3. 解析数组\n  return JSON.parse(cleanJson);\n} catch (error) {\n  return { error: \"解析失败\", raw: $input.item.json.choices[0].message.content };\n}"
+      },
+      "id": "825299e0-2789-4e83-ad33-3cdeca09d3d3",
+      "name": "JSON 数组拆分",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO geo_results (brand, rank, sentiment, summary) VALUES ($1, $2, $3, $4)",
+        "options": {
+          "queryReplacement": "={{ [$json.brand, $json.rank, $json.sentiment, $json.summary] }}"
+        }
+      },
+      "id": "56ab0031-eba1-49fd-83dc-fb901f82dc9d",
+      "name": "入库",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        752,
+        -208
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "gzT0QMeqXlySTMOA",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook (输入需求)": {
+      "main": [
+        [
+          {
+            "node": "呼叫 FastGPT (生成)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "呼叫 FastGPT (生成)": {
+      "main": [
+        [
+          {
+            "node": "JSON 数组拆分",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON 数组拆分": {
+      "main": [
+        [
+          {
+            "node": "入库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "90ba6348-b7d1-4114-a8b1-81cc9402514f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f2d44ff5d72bd618a0e9a94dfa9f0702ee603fc6e05cd326e3fb38ed370d374e"
+  },
+  "id": "EGGmEciG7pOqfIN3-sscF",
+  "tags": []
+}

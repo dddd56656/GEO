@@ -1,0 +1,177 @@
+version: '3.8'
+
+# 1. 基础设施层
+services:
+  # Redis: 缓存
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    restart: always
+    command: redis-server --requirepass 123456 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - geo-network
+
+  # MongoDB: FastGPT主库
+  mongo:
+    image: mongo:5.0.32
+    container_name: mongo
+    restart: always
+    # 限制内存防止WSL崩溃，且自动初始化副本集
+    command: mongod --replSet rs0 --wiredTigerCacheSizeGB 0.5
+    volumes:
+      - mongo_data:/data/db
+    entrypoint:
+      - bash
+      - -c
+      - |
+        # 自动初始化副本集的脚本
+        docker-entrypoint.sh $$@ &
+        until mongo --eval "print(\"waited for connection\")"; do sleep 2; done
+        mongo --eval "rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]})" 
+        wait $$!
+    networks:
+      - geo-network
+
+  # PostgreSQL: 向量库 + 结果数据库 (双重用途)
+  vectorDB:
+    image: pgvector/pgvector:0.8.0-pg15
+    container_name: vectorDB
+    restart: always
+    environment:
+      - POSTGRES_USER=geo_admin
+      - POSTGRES_PASSWORD=google_standard_pw
+      - POSTGRES_DB=geo_tracking
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - geo-network
+
+  # Minio: 对象存储 (端口避开 Windows 雷区)
+  minio:
+    image: minio/minio:RELEASE.2024-01-18T22-51-28Z
+    container_name: minio
+    restart: always
+    ports:
+      - "19000:9000" # API 端口
+      - "19001:9001" # Console 端口
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=root
+      - MINIO_ROOT_PASSWORD=google_standard_pw
+    volumes:
+      - minio_data:/data
+    networks:
+      - geo-network
+
+# 2. AI 能力层
+  # OneAPI: 模型聚合 (替代官方复杂的 AIProxy)
+  oneapi:
+    image: justsong/one-api:latest
+    container_name: oneapi
+    restart: always
+    ports:
+      - "3001:3000"
+    volumes:
+      - oneapi_data:/data
+    networks:
+      - geo-network
+
+  # FastGPT 插件服务 (V4.14 核心依赖)
+  fastgpt-plugin:
+    image: ghcr.io/labring/fastgpt-plugin:v0.4.0
+    container_name: fastgpt-plugin
+    restart: always
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/fastgpt
+      - REDIS_URL=redis://:123456@redis:6379
+      - AUTH_TOKEN=fastgpt-token
+    networks:
+      - geo-network
+
+  # FastGPT 主服务
+  fastgpt:
+    image: ghcr.io/labring/fastgpt:v4.14.5
+    container_name: fastgpt
+    ports:
+      - "3000:3000"
+    restart: always
+    environment:
+      # === 基础配置 ===
+      - HOME_URL=http://127.0.0.1:3000
+      - API_URL=http://127.0.0.1:3000
+      - PORT=3000
+      - DB_MAX_LINK=5
+      - TOKEN_KEY=my_secret_token_key
+      - FILE_TOKEN_KEY=my_secret_file_key
+      - ROOT_KEY=123456
+      - LOG_LEVEL=warn
+      
+      # === 数据库 ===
+      - MONGODB_URI=mongodb://mongo:27017/fastgpt
+      - PG_URL=postgresql://geo_admin:google_standard_pw@vectorDB:5432/geo_tracking
+      - REDIS_URL=redis://:123456@redis:6379
+      
+      # === OneAPI 连接 ===
+      - ONEAPI_URL=http://oneapi:3000/v1
+      - CHAT_API_KEY=sk-fastgpt 
+      
+      # === 插件连接 ===
+      - PLUGIN_BASE_URL=http://fastgpt-plugin:3000
+      - PLUGIN_TOKEN=fastgpt-token
+      
+      # === S3 配置 (19000 端口) ===
+      - STORAGE_VENDOR=minio
+      - STORAGE_ACCESS_KEY_ID=root
+      - STORAGE_SECRET_ACCESS_KEY=google_standard_pw
+      - STORAGE_PUBLIC_BUCKET=fastgpt-public
+      - STORAGE_PRIVATE_BUCKET=fastgpt-private
+      - STORAGE_EXTERNAL_ENDPOINT=http://localhost:19000
+      - STORAGE_S3_ENDPOINT=http://minio:9000
+      - STORAGE_S3_FORCE_PATH_STYLE=true
+      
+    depends_on:
+      - mongo
+      - redis
+      - vectorDB
+      - fastgpt-plugin
+      - minio
+    networks:
+      - geo-network
+
+# 3. 业务编排层
+  # n8n: 你的后端逻辑中心
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Shanghai
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - geo-network
+
+# 定义内部卷 (解决 Windows 权限)
+volumes:
+  redis_data:
+  mongo_data:
+  pg_data:
+  minio_data:
+  oneapi_data:
+  n8n_data:
+
+networks:
+  geo-network:
+    driver: bridge
