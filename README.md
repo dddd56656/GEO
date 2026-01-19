@@ -1,4 +1,4 @@
- # 📘 第一部分：系统架构文档 (Architecture Design)
+ # 📘 大模型工作流
 
    这是一个**事件驱动 (Event-Driven)** 的架构。n8n 作为中枢神经，调度一切。
 
