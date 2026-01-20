@@ -53,7 +53,7 @@
        Loop_Controller -->|7. 写入| Postgres
    ```
 
-   ![The Hub API Agent Flow-2026-01-19-034546](GEO 追踪系统 - 极速落地版架构与 API 文档.assets/The Hub API Agent Flow-2026-01-19-034546.png)
+<img width="1132" height="746" alt="image" src="https://github.com/user-attachments/assets/27933b47-820f-49cd-b19b-e945a0327421" />
 
    ### 2. 组件职责说明
    
@@ -67,3 +67,16 @@
    > 1. **前端**：使用 **Flutter** 构建，一次开发即可支持移动端查看，满足随时随地监控的需求。
    > 2. **后端**：摒弃了传统的重型后端，采用 **n8n** 进行业务流程编排。这让我能在一小时内接入 OneAPI 聚合的 5 个大模型接口，并自带重试和任务调度机制。
    > 3. **数据处理**：引入 **FastGPT** 作为数据清洗层，利用 LLM 的语义理解能力，把非结构化的 AI 回答转化为标准的 JSON 数据，存入数据库。
+
+具体效果:
+<img width="430" height="721" alt="image" src="https://github.com/user-attachments/assets/f8a33025-4794-4fc6-9ea8-7d8c2d4eae8c" />
+
+
+<img width="436" height="795" alt="image" src="https://github.com/user-attachments/assets/edf7cd3e-28fe-46e7-a2a7-9bd27e86214a" />
+
+<img width="1025" height="416" alt="image" src="https://github.com/user-attachments/assets/31bdbdb3-6f1b-496a-9939-d60ac4bdc7c4" />
+
+<img width="1648" height="531" alt="image" src="https://github.com/user-attachments/assets/f44f9658-31c2-4d7b-8138-870f216e581e" />
+
+
+   
